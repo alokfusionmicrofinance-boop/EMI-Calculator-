@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loan EMI Finder</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b6b57">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f4f6f5;--fg:#13231f;--mut:#5b6b66;--card:#fff;--bd:#cfd8d4;--acc:#0b6b57;--accfg:#fff;--warn:#9a5b00;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1714;--fg:#eaf2ef;--mut:#9db0a9;--card:#17231f;--bd:#2c3d37;--acc:#3ecf9f;--accfg:#06241b;--warn:#f0b24d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1714;--fg:#eaf2ef;--mut:#9db0a9;--card:#17231f;--bd:#2c3d37;--acc:#3ecf9f;--accfg:#06241b;--warn:#f0b24d;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:12px;max-width:560px;margin-inline:auto}
+h1{font-size:20px;margin:4px 0 12px}
+h2{font-size:14px;color:var(--mut);margin:14px 0 6px;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;border:1.5px solid var(--bd);background:var(--card);color:var(--fg);border-radius:10px;padding:10px 14px;min-height:44px}
+button.on{background:var(--acc);color:var(--accfg);border-color:var(--acc);font-weight:700}
+button:disabled{opacity:.35}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+#amts button{flex:1 0 27%;font-size:17px}
+.card{background:var(--card);border:1.5px solid var(--acc);border-radius:14px;padding:14px;margin-top:10px}
+.big{font-size:34px;font-weight:800;color:var(--acc);line-height:1.1}
+.sub{color:var(--mut);margin:2px 0 10px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.g div span{display:block;color:var(--mut);font-size:13px}
+.g div b{font-size:17px}
+.w{color:var(--warn);font-size:13px;margin-top:8px}
+input{font:inherit;width:100%;padding:12px;border:1.5px solid var(--bd);border-radius:10px;background:var(--card);color:var(--fg);min-height:48px}
+.bl button{display:flex;justify-content:space-between;width:100%;margin-top:6px;text-align:left}
+.mut{color:var(--mut)}
+.tag{font-weight:700;color:var(--mut);margin-bottom:4px}
+.diff{color:var(--warn);font-weight:600;margin:10px 0 0}
+</style>
+</head>
+<body>
+<h1>Loan EMI Finder</h1>
+<h2>Customer</h2><div class="row" id="cust"></div>
+<h2>Product</h2><div class="row" id="prod"></div>
+<h2>Loan amount (₹)</h2><div class="row" id="amts"></div>
+<div id="out"></div>
+<h2>Customer can pay per instalment (₹)</h2>
+<input id="bud" type="number" inputmode="numeric" placeholder="e.g. 2000">
+<div class="bl" id="bl"></div>
+<script>
+// row: [amount, total interest, installments, EMI, last EMI, LPF, insurance, check?]
+const D={
+IGLNew:{rate:"23.98%",days:30,rows:[
+[10000,1249,12,1000,249,171,107],[12000,1499,12,1200,299,205,129],[15000,1873,12,1500,373,257,161],[18000,2248,12,1800,448,308,193],
+[20000,4266,20,1250,516,342,410],[25000,5386,20,1550,936,428,512],[30000,8156,25,1550,956,513,640],[35000,9573,25,1800,1373,599,746],
+[40000,10990,25,2050,1790,684,853],[45000,12061,25,2350,661,770,959],[50000,13478,25,2600,1078,856,1066],[55000,14895,25,2850,1495,941,1172]]},
+IGLExisting:{rate:"23.95%",days:30,rows:[
+[10000,1247,12,1000,247,171,107],[12000,1497,12,1200,297,205,129],[15000,1871,12,1500,371,257,161],[18000,2245,12,1800,445,308,193],
+[20000,4259,20,1250,509,342,410],[25000,5377,20,1550,927,428,512],[30000,8142,25,1550,942,513,640],[35000,9556,25,1800,1356,599,746],
+[40000,10971,25,2050,1771,684,853],[45000,12040,25,2350,640,770,959],[50000,13455,25,2600,1055,856,1066],[55000,14869,25,2850,1469,941,1172],
+[60000,16284,25,3100,1884,1027,1279],[65000,17698,25,3350,2298,1112,1385],[70000,19113,25,3600,2713,1198,1492],[73000,19961,25,3750,2961,1249,1555],
+[75000,20182,25,3900,1582,1283,1598],[77000,20748,25,4000,1748,1317,1641],[78000,21031,25,4050,1831,1335,1662],[80000,21596,25,4150,1996,1369,1705],
+[82000,22162,25,4250,2162,1403,1747],[85000,23011,25,4400,2411,1454,1811],[90000,24425,25,4650,2825,1540,1918],
+[55000,22240,36,2150,1990,941,1715],[60000,24191,36,2350,1941,1027,1871],[65000,26141,36,2550,1891,1112,2027],[70000,28092,36,2750,1842,1198,2183],
+[75000,30042,36,2950,1792,1283,2339],[80000,31993,36,3150,1743,1369,2494],[85000,33943,36,3350,1693,1454,2650],[90000,35894,36,3550,1644,1540,2806]]},
+// New sheet (24.15%), existing customers, rows from 40,000 up. Last array = [Bajaj, HDFC, ICICI] insurance; Kotak is the normal insurance field.
+IGLExisting2:{rate:"24.15%",days:30,rows:[
+[40000,10748,25,2100,348,684,852,0,[892,920,893]],
+[45000,12179,25,2350,779,770,959,0,[1004,1035,1005]],
+[50000,13609,25,2600,1209,856,1065,0,[1115,1150,1117]],
+[55000,15040,25,2850,1640,941,1172,0,[1227,1264,1228]],
+[60000,16470,25,3100,2070,1027,1278,0,[1338,1379,1340]],
+[65000,17553,25,3400,953,1112,1385,0,[1450,1494,1451]],
+[70000,19332,25,3600,2932,1198,1491,0,[1562,1609,1563]],
+[73000,19841,25,3800,1641,1249,1555,0,[1628,1678,1630]],
+[75000,20414,25,3900,1814,1283,1598,0,[1673,1724,1675]],
+[77000,20986,25,4000,1986,1317,1640,0,[1718,1770,1719]],
+[78000,20924,25,4100,524,1335,1661,0,[1740,1793,1742]],
+[80000,21496,25,4200,696,1369,1704,0,[1785,1839,1786]],
+[82000,22068,25,4300,868,1403,1747,0,[1829,1885,1831]],
+[85000,23275,25,4400,2675,1454,1811,0,[1896,1954,1898]],
+[90000,24357,25,4700,1557,1540,1917,0,[2008,2069,2010]],
+[55000,22217,36,2170,1267,941,1715,0,[1847,1873,1818]],
+[60000,24194,36,2370,1244,1027,1870,0,[2015,2043,1983]],
+[65000,26487,36,2550,2237,1112,2026,0,[2183,2213,2148]],
+[70000,28464,36,2750,2214,1198,2182,0,[2351,2383,2314]],
+[73000,29174,36,2900,674,1249,2276,0,[2451,2485,2413]],
+[75000,30124,36,2970,1174,1283,2338,0,[2519,2554,2479]],
+[77000,30914,36,3050,1164,1317,2400,0,[2586,2622,2545]],
+[78000,31151,36,3100,651,1335,2432,0,[2619,2656,2578]],
+[80000,32417,36,3150,2167,1369,2494,0,[2686,2724,2644]],
+[82000,32891,36,3250,1141,1403,2556,0,[2754,2792,2710]],
+[85000,34393,36,3350,2143,1454,2650,0,[2854,2894,2809]],
+[90000,36370,36,3550,2120,1540,2806,0,[3022,3064,2975]]]},
+Topup:{rate:"23.95%",days:28,rows:[
+[5000,624,12,500,124,86,54,1],[6000,748,12,600,148,103,65],[7000,873,12,700,173,120,75],[8000,998,12,800,198,137,86],
+[10000,1247,12,1000,247,171,107],[12000,1497,12,1200,297,205,129],[15000,1871,12,1500,371,257,161],[20000,2494,12,2000,494,342,214]]},
+Ujala:{rate:"23.95%",days:28,rows:[
+[49500,13486,25,2550,1786,847,1055],[55000,14869,25,2850,1469,941,1172],[60500,16253,25,3150,1153,1035,1289],[66000,17981,25,3400,2381,1129,1406],
+[71500,19364,25,3700,2064,1223,1523],[77000,20748,25,4000,1748,1317,1641],[82500,22476,25,4250,2976,1412,1758],[88000,23860,25,4550,2660,1506,1875],
+[90000,24771,25,4600,4371,1540,1918],[51750,14070,25,2670,1740,885,1103],[57500,15404,25,3000,904,984,1225],[63250,17289,25,3250,2539,1082,1348],
+[69000,18485,25,3600,1085,1181,1470],[74750,20025,25,3900,1175,1279,1593],[80500,21565,25,4200,1265,1377,1715],[86250,23106,25,4500,1356,1476,1838],
+[90000,24080,25,4700,1280,1540,1918],[56250,15102,25,2930,1032,962,1199],[62500,16818,25,3250,1318,1069,1332],[68750,18328,25,3600,678,1176,1465],
+[75000,20182,25,3900,1582,1283,1598],[81250,21691,25,4250,941,1390,1731],[87500,23546,25,4550,1846,1497,1864]]}
+};
+let c="Existing",p="IGL",amt=null;
+const $=id=>document.getElementById(id);
+const N=n=>n.toLocaleString("en-IN");
+const data=()=>p==="IGL"?D["IGL"+c]:D[p];
+const sets=()=>p==="IGL"&&c==="Existing"?[["Printed chart",D.IGLExisting],["New sheet",D.IGLExisting2]]:[[null,data()]];
+function card(r,d,lb){
+  const [a,ti,n,e,l,f,i,w,x]=r;
+  return `<div class="card">${lb?`<div class="tag">${lb} · ${d.rate}</div>`:""}<div class="big">₹${N(e)}</div>
+  <div class="sub">EMI × ${n} instalments, every ${d.days} days</div>
+  <div class="g">
+  <div><span>Loan amount</span><b>₹${N(a)}</b></div>
+  <div><span>Last instalment</span><b>₹${N(l)}</b></div>
+  <div><span>Total interest</span><b>₹${N(ti)}</b></div>
+  <div><span>Interest rate</span><b>${d.rate}</b></div>
+  <div><span>LPF (1.45% + GST)</span><b>₹${N(f)}</b></div>
+  <div><span>Insurance (Kotak)</span><b>₹${N(i)}</b></div>
+  <div><span>Total to repay</span><b>₹${N(a+ti)}</b></div>
+  <div><span>Tenure</span><b>${n} months</b></div></div>
+  ${x?`<div class="sub" style="margin:10px 0 0">Insurance choices: Bajaj ₹${N(x[0])} · HDFC ₹${N(x[1])} · Kotak ₹${N(i)} · ICICI ₹${N(x[2])}</div>`:""}
+  ${w?'<div class="w">LPF and insurance on this row were hidden by glare in the photo. Check them on the paper chart.</div>':""}</div>`;
+}
+function render(){
+  $("cust").innerHTML=["New","Existing"].map(x=>`<button class="${x===c?"on":""}" data-c="${x}">${x} customer</button>`).join("");
+  $("prod").innerHTML=["IGL","Topup","Ujala"].map(x=>`<button class="${x===p?"on":""}" data-p="${x}" ${c==="New"&&x!=="IGL"?"disabled":""}>${x}</button>`).join("");
+  const S=sets(),amts=[...new Set(S.flatMap(([,d])=>d.rows.map(r=>r[0])))].sort((a,b)=>a-b);
+  if(!amts.includes(amt))amt=null;
+  $("amts").innerHTML=amts.map(a=>`<button class="${a===amt?"on":""}" data-a="${a}">${N(a)}</button>`).join("");
+  const out=S.flatMap(([lb,d])=>d.rows.filter(r=>r[0]===amt).map(r=>card(r,d,lb)));
+  let note="";
+  if(amt&&S.length>1){
+    const k=d=>JSON.stringify(d.rows.filter(r=>r[0]===amt).map(r=>[r[2],r[3]]));
+    if(!S[1][1].rows.some(r=>r[0]===amt))note='<p class="mut">New sheet has no data for this amount yet, so only the printed chart is shown.</p>';
+    else if(k(S[0][1])!==k(S[1][1]))note='<p class="diff">The two charts give different EMIs for this amount. Confirm with your branch before quoting.</p>';
+  }
+  $("out").innerHTML=out.length?out.join("")+note:'<p class="mut">Tap a loan amount to see the EMI.</p>';
+  bud();
+}
+function bud(){
+  const b=+$("bud").value;
+  if(!b){$("bl").innerHTML="";return}
+  const m=sets().flatMap(([lb,d])=>d.rows.filter(r=>r[3]<=b).map(r=>[r,lb])).sort((x,y)=>y[0][0]-x[0][0]||x[0][3]-y[0][3]).slice(0,10);
+  $("bl").innerHTML=m.length?m.map(([r,lb])=>`<button data-a="${r[0]}"><span>₹${N(r[0])}${lb?" · "+lb:""}</span><b>EMI ₹${N(r[3])} × ${r[2]}</b></button>`).join(""):'<p class="mut">No loan fits this EMI for the selected customer and product.</p>';
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.c){c=t.dataset.c;if(c==="New")p="IGL"}
+  else if(t.dataset.p)p=t.dataset.p;
+  else if(t.dataset.a){amt=+t.dataset.a;render();$("out").scrollIntoView({block:"nearest"});return}
+  render();
+});
+$("bud").addEventListener("input",bud);
+render();
+if("serviceWorker" in navigator){window.addEventListener("load",()=>{try{navigator.serviceWorker.register("sw.js")}catch(e){}})}
+</script>
+</body>
+</html>
